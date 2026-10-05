@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>🌳 สวนทุเรียน</title>
+<style>
+:root{--g:#2f6b3a;--g2:#e8f3ea;--r:#c0392b;--bg:#f6f8f5;--t:#1f2a22;--b:#d8e0d8}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,"Sarabun","Noto Sans Thai",sans-serif;background:var(--bg);color:var(--t)}
+header{background:var(--g);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
+header h1{font-size:18px;margin:0}header button{background:none;border:0;color:#fff;font-size:20px;cursor:pointer}
+nav{display:flex;overflow-x:auto;background:#fff;border-bottom:1px solid var(--b);position:sticky;top:48px;z-index:4}
+nav button{flex:none;padding:11px 14px;border:0;background:none;font-size:14px;cursor:pointer;border-bottom:3px solid transparent;color:#555}
+nav button.on{color:var(--g);border-color:var(--g);font-weight:700}
+main{max-width:960px;margin:auto;padding:14px}
+.card{background:#fff;border:1px solid var(--b);border-radius:10px;padding:14px;margin-bottom:14px}
+form{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+label{font-size:12px;color:#555;display:flex;flex-direction:column;gap:3px}
+input,select,textarea{padding:8px;border:1px solid var(--b);border-radius:6px;font:inherit;min-width:0}
+.btn{background:var(--g);color:#fff;border:0;padding:10px 16px;border-radius:6px;cursor:pointer;font:inherit;align-self:end}
+.btn:disabled{opacity:.5}.sm{padding:4px 8px;font-size:12px;border-radius:5px;border:1px solid var(--b);background:#fff;cursor:pointer}
+.full{grid-column:1/-1}
+.items{display:grid;gap:6px}.it{display:grid;grid-template-columns:3fr 1fr 1fr 1.3fr 1.3fr auto;gap:6px;align-items:end}
+.it .tot{padding:8px 0;font-weight:700;text-align:right}
+@media(max-width:640px){.it{grid-template-columns:1fr 1fr 1fr}.it>:first-child{grid-column:1/-1}}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--b);text-align:left;vertical-align:top}th{background:var(--g2)}
+.ph{display:flex;gap:4px;flex-wrap:wrap}.ph img{width:42px;height:42px;object-fit:cover;border-radius:5px;cursor:pointer}
+.pv{position:relative}.pv b{position:absolute;top:-5px;right:-5px;background:var(--r);color:#fff;border-radius:50%;width:16px;height:16px;font-size:11px;text-align:center;cursor:pointer}
+.tag{padding:2px 8px;border-radius:10px;font-size:12px;background:#fbe9b7}.tag.done{background:#cfe9d4;color:var(--g)}
+.kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+.kpi div{background:#fff;border:1px solid var(--b);border-radius:10px;padding:12px;text-align:center}
+.kpi b{display:block;font-size:20px}.in{color:var(--g)}.ex{color:var(--r)}.s{font-size:12px;color:#666}
+.bar{height:7px}.bar i{display:block;height:100%}
+#toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#222;color:#fff;padding:8px 16px;border-radius:20px;display:none;z-index:9}
+#modal{position:fixed;inset:0;background:#000b;display:none;align-items:center;justify-content:center;z-index:8}#modal img{max-width:94%;max-height:90%}
+</style>
+</head>
+<body>
+<header><h1>🌳 สวนทุเรียน</h1><button onclick="setUrl()" title="ตั้งค่า">⚙</button></header>
+<nav id="nav"></nav>
+<main id="main"></main>
+<div id="toast"></div><div id="modal" onclick="this.style.display='none'"><img id="mimg"></div>
+
+<script>
+let API = localStorage.getItem('durianApi') || '';   // URL ของ Apps Script Web App
+const ZONES = ['แปลง A','แปลง B','แปลง C'];          // แก้ชื่อแปลงได้ที่นี่
+const baht = n => Number(n||0).toLocaleString('th-TH',{maximumFractionDigits:2});
+const today = () => new Date(Date.now()+7*3600e3).toISOString().slice(0,10);
+const esc = s => String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const F=(k,l,t='text',o)=>({k,l,t,o});
+const D=F('date','วันที่','date'), Z=F('zone','แปลง','select',ZONES), N=F('note','หมายเหตุ');
+const MODULES={
+  income:{ico:'💰',name:'รายรับ',bill:1,f:[]},
+  expense:{ico:'🧾',name:'รายจ่าย',bill:1,cat:['ปุ๋ย','ยา/สารเคมี','ค่าแรง','น้ำมัน/ไฟฟ้า','อุปกรณ์','อื่นๆ'],f:[]},
+  fertilizer:{ico:'🌱',name:'ตารางปุ๋ย',f:[D,Z,F('formula','สูตรปุ๋ย (เช่น 15-15-15)'),F('amount','ปริมาณ (กก./ต้น)'),F('status','สถานะ','select',['วางแผน','ใส่แล้ว']),N]},
+  growth:{ico:'📏',name:'การเจริญเติบโต',f:[D,Z,F('stage','ระยะ','select',['แตกใบอ่อน','ใบเพสลาด','สะสมอาหาร','ออกดอก','ติดผล','ผลเล็ก','ผลโต','ก่อนเก็บเกี่ยว','เก็บเกี่ยว']),F('height','ความสูง/ขนาด'),N]},
+  sprayrun:{ico:'🚿',name:'การพ่นยา',f:[D,Z,F('chemical','ชื่อยา/สาร'),F('qty','ปริมาณยาที่ใช้'),F('water','น้ำ (ลิตร)'),F('sprayer','ผู้พ่น'),N]},
+  spray:{ico:'🧪',name:'ศัตรูพืช/การใช้ยา',f:[D,Z,F('target','ศัตรูพืช/โรค (เช่น เพลี้ยไฟ, รากเน่า)'),F('chemical','ชื่อยา/สาร'),F('dose','อัตราผสม'),N]},
+  mowing:{ico:'🌾',name:'ตัดหญ้า',f:[D,Z,F('cost','ค่าใช้จ่าย','number'),N]},
+  activity:{ico:'📋',name:'กิจกรรมสวน',f:[D,F('title','กิจกรรม (เช่น ตัดแต่งกิ่ง, ให้น้ำ)'),F('detail','รายละเอียด')]}
+};
+const TABS=['summary',...Object.keys(MODULES)];
+let cur='summary',DB={},PH=[],ITEMS=[];
+
+// ===== ข้อมูล: Google Sheets ผ่าน Apps Script (ไม่ตั้ง URL = โหมดทดลองในเครื่อง) =====
+async function call(b){
+  if(!API)return local(b);
+  const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(b)});
+  const j=await r.json();if(!j.ok)throw new Error(j.error);return j;
+}
+function local(b){
+  const k='demo_'+b.table;let rows=JSON.parse(localStorage.getItem(k)||'[]');
+  if(b.action==='add'){const bid=crypto.randomUUID();(b.records||[b.record]).forEach((r,i)=>{r.id=crypto.randomUUID();r.billId=bid;r.photo=i?[]:(b.photos||[]);rows.push(r);});}
+  if(b.action==='delete')rows=rows.filter(r=>b.billId?r.billId!==b.billId:r.id!==b.id);
+  if(b.action==='update')rows=rows.map(r=>r.id===b.id?{...r,...b.record}:r);
+  try{localStorage.setItem(k,JSON.stringify(rows));}catch(e){toast('พื้นที่โหมดทดลองเต็ม');}
+  return{ok:true,rows};
+}
+const load=async t=>DB[t]=(await call({action:'list',table:t})).rows;
+async function loadAll(){toast('กำลังโหลด...');try{await Promise.all(Object.keys(MODULES).map(load));}catch(e){toast('โหลดไม่ได้: '+e.message);}render();}
+const photos=r=>Array.isArray(r.photo)?r.photo:String(r.photo||'').split(',').filter(Boolean);
+const phHtml=r=>`<div class="ph">${photos(r).map(p=>`<img src="${p}" onclick="show(this.src)">`).join('')}</div>`;
+
+// ===== รูปภาพ (เพิ่มได้หลายรูป ย่อก่อนอัปโหลด) =====
+function shrink(file,max=1000){return new Promise(res=>{const im=new Image(),u=URL.createObjectURL(file);
+  im.onload=()=>{const s=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement('canvas');
+  c.width=im.width*s;c.height=im.height*s;c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);res(c.toDataURL('image/jpeg',.75));};im.src=u;});}
+async function addPh(inp){for(const f of inp.files)PH.push(await shrink(f));inp.value='';drawPh();}
+function drawPh(){document.getElementById('pv').innerHTML=PH.map((p,i)=>`<span class="pv"><img src="${p}" style="width:56px;height:56px;object-fit:cover;border-radius:6px"><b onclick="PH.splice(${i},1);drawPh()">×</b></span>`).join('');}
+const photoField=()=>`<div class="full"><label>📷 แนบรูปภาพ (เลือกได้หลายรูป / กดเพิ่มได้ต่อเนื่อง)</label>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:4px"><input type="file" accept="image/*" multiple onchange="addPh(this)"><span id="pv" style="display:flex;gap:6px;flex-wrap:wrap"></span></div></div>`;
+
+// ===== UI =====
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',2500);}
+function setUrl(){const u=prompt('วาง URL ของ Apps Script Web App\n(เว้นว่าง = โหมดทดลองในเครื่อง)',API);if(u!==null){API=u.trim();localStorage.setItem('durianApi',API);loadAll();}}
+function show(s){document.getElementById('mimg').src=s;document.getElementById('modal').style.display='flex';}
+function render(){PH=[];ITEMS=[{}];
+  document.getElementById('nav').innerHTML=TABS.map(t=>`<button class="${t===cur?'on':''}" onclick="cur='${t}';render()">${t==='summary'?'📊 สรุปรายปี':MODULES[t].ico+' '+MODULES[t].name}</button>`).join('');
+  cur==='summary'?renderSummary():MODULES[cur].bill?renderBill(cur):renderModule(cur);}
+
+const sorted=t=>(DB[t]||[]).slice().sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+const field=f=>f.t==='select'?`<label>${f.l}<select name="${f.k}">${f.o.map(o=>`<option>${o}</option>`).join('')}</select></label>`
+  :`<label>${f.l}<input name="${f.k}" type="${f.t}" ${f.t==='number'?'step="any" min="0"':''}${f.k==='date'?` value="${today()}" required`:''}></label>`;
+
+function renderModule(t){
+  const m=MODULES[t],rows=sorted(t),cols=m.f.map(f=>f.k);
+  document.getElementById('main').innerHTML=`
+  <div class="card"><form id="fm">${m.f.map(field).join('')}${photoField()}<button class="btn" id="sv">บันทึก</button></form></div>
+  <div class="card tw"><table><tr>${m.f.map(f=>`<th>${f.l.split(' (')[0]}</th>`).join('')}<th>รูป</th><th></th></tr>
+  ${rows.map(r=>`<tr>${cols.map(k=>`<td>${k==='status'?`<span class="tag ${r[k]==='ใส่แล้ว'?'done':''}">${esc(r[k])}</span>`:k==='cost'?baht(r[k]):esc(r[k])}</td>`).join('')}<td>${phHtml(r)}</td>
+  <td style="white-space:nowrap">${t==='fertilizer'&&r.status!=='ใส่แล้ว'?`<button class="sm" onclick="done('${r.id}')">✔ ใส่แล้ว</button> `:''}<button class="sm" onclick="del('${t}','${r.id}')">🗑</button></td></tr>`).join('')||`<tr><td colspan="9" style="text-align:center;color:#999">ยังไม่มีข้อมูล</td></tr>`}</table></div>`;
+  document.getElementById('fm').onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target),rec={};m.f.forEach(f=>rec[f.k]=fd.get(f.k));save(t,{record:rec});};
+}
+
+// ----- รายรับ/รายจ่าย: หลายรายการ + ราคาต่อหน่วย + หลายรูปต่อบิล -----
+function renderBill(t){
+  const m=MODULES[t],rows=sorted(t),bills={};
+  rows.forEach(r=>{const k=r.billId||r.id;(bills[k]=bills[k]||[]).push(r);});
+  const list=Object.values(bills);
+  document.getElementById('main').innerHTML=`
+  <div class="card"><form id="fm"><label>วันที่<input name="date" type="date" value="${today()}" required></label>
+   ${m.cat?`<label>หมวด<select name="category">${m.cat.map(c=>`<option>${c}</option>`).join('')}</select></label>`:''}
+   <label>หมายเหตุ/ร้านค้า/ผู้ซื้อ<input name="note"></label>
+   <div class="full"><div class="items" id="items"></div>
+   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px"><button type="button" class="sm" onclick="ITEMS.push({});drawItems()">＋ เพิ่มรายการ</button><b>รวมทั้งบิล: <span id="gt">0</span> บาท</b></div></div>
+   ${photoField()}<button class="btn" id="sv">บันทึก${m.name}</button></form></div>
+  <div class="card tw"><table><tr><th>วันที่</th>${m.cat?'<th>หมวด</th>':''}<th>รายการ</th><th>รวม (บาท)</th><th>รูป</th><th></th></tr>
+  ${list.map(g=>{const f=g[0],tot=g.reduce((s,r)=>s+(+r.amount||0),0);
+   return`<tr><td>${esc(f.date)}</td>${m.cat?`<td>${esc(f.category)}</td>`:''}<td>${g.map(r=>`${esc(r.item)} <span class="s">${baht(r.qty)} ${esc(r.unit)} × ${baht(r.unitPrice)} = ${baht(r.amount)}</span>`).join('<br>')}${f.note?`<div class="s">📝 ${esc(f.note)}</div>`:''}</td>
+   <td><b>${baht(tot)}</b></td><td>${phHtml(f)}</td><td><button class="sm" onclick="delBill('${t}','${f.billId||''}','${f.id}')">🗑</button></td></tr>`;}).join('')||'<tr><td colspan="6" style="text-align:center;color:#999">ยังไม่มีข้อมูล</td></tr>'}</table></div>`;
+  drawItems();
+  document.getElementById('fm').onsubmit=e=>{e.preventDefault();const fd=new FormData(e.target);
+    const items=ITEMS.filter(i=>i.item);if(!items.length)return toast('กรุณาใส่รายการอย่างน้อย 1 รายการ');
+    const records=items.map(i=>({date:fd.get('date'),category:fd.get('category')||undefined,item:i.item,qty:+i.qty||1,unit:i.unit||'',unitPrice:+i.price||0,amount:(+i.qty||1)*(+i.price||0),note:fd.get('note')}));
+    save(t,{records});};
+}
+function drawItems(){
+  document.getElementById('items').innerHTML=ITEMS.map((it,i)=>`<div class="it">
+   <label>${i?'':'รายการ'}<input value="${esc(it.item)}" oninput="ITEMS[${i}].item=this.value" placeholder="เช่น ทุเรียนหมอนทอง"></label>
+   <label>${i?'':'จำนวน'}<input type="number" step="any" min="0" value="${it.qty??''}" oninput="up(${i},'qty',this.value)"></label>
+   <label>${i?'':'หน่วย'}<input value="${esc(it.unit)}" oninput="ITEMS[${i}].unit=this.value" placeholder="กก./ถุง"></label>
+   <label>${i?'':'ราคา/หน่วย'}<input type="number" step="any" min="0" value="${it.price??''}" oninput="up(${i},'price',this.value)"></label>
+   <label>${i?'':'รวม'}<div class="tot" id="tot${i}">${baht((+it.qty||1)*(+it.price||0))}</div></label>
+   <button type="button" class="sm" onclick="ITEMS.length>1&&ITEMS.splice(${i},1);drawItems()">✕</button></div>`).join('');gt();}
+function up(i,k,v){ITEMS[i][k]=v;document.getElementById('tot'+i).textContent=baht((+ITEMS[i].qty||1)*(+ITEMS[i].price||0));gt();}
+function gt(){document.getElementById('gt').textContent=baht(ITEMS.reduce((s,i)=>s+(+i.qty||1)*(+i.price||0),0));}
+
+async function save(t,body){
+  const b=document.getElementById('sv');b.disabled=true;b.textContent='กำลังบันทึก...';
+  try{await call({action:'add',table:t,photos:PH,...body});await load(t);toast('บันทึกแล้ว ✔');}catch(er){toast('ผิดพลาด: '+er.message);}
+  render();
+}
+async function del(t,id){if(!confirm('ลบรายการนี้?'))return;await call({action:'delete',table:t,id});await load(t);render();}
+async function delBill(t,billId,id){if(!confirm('ลบทั้งบิลนี้?'))return;await call(billId?{action:'delete',table:t,billId}:{action:'delete',table:t,id});await load(t);render();}
+async function done(id){await call({action:'update',table:'fertilizer',id,record:{status:'ใส่แล้ว'}});await load('fertilizer');render();}
+
+// ===== สรุปรายปี =====
+let YEAR=new Date().getFullYear();
+function renderSummary(){
+  const M=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+  const inc=Array(12).fill(0),exp=Array(12).fill(0),cat={},y=String(YEAR),mo=d=>+String(d).slice(5,7)-1,ok=d=>String(d).slice(0,4)===y;
+  (DB.income||[]).filter(r=>ok(r.date)).forEach(r=>inc[mo(r.date)]+=+r.amount||0);
+  (DB.expense||[]).filter(r=>ok(r.date)).forEach(r=>{exp[mo(r.date)]+=+r.amount||0;cat[r.category]=(cat[r.category]||0)+(+r.amount||0);});
+  (DB.mowing||[]).filter(r=>ok(r.date)&&+r.cost).forEach(r=>{exp[mo(r.date)]+=+r.cost;cat['ตัดหญ้า']=(cat['ตัดหญ้า']||0)+ +r.cost;});
+  const TI=inc.reduce((a,b)=>a+b,0),TE=exp.reduce((a,b)=>a+b,0),mx=Math.max(...inc,...exp,1);
+  const years=[...new Set([new Date().getFullYear(),...['income','expense'].flatMap(t=>(DB[t]||[]).map(r=>+String(r.date).slice(0,4)))].filter(Boolean))].sort().reverse();
+  document.getElementById('main').innerHTML=`
+  <div class="card"><label>ปี (ค.ศ.)<select onchange="YEAR=+this.value;renderSummary()">${years.map(v=>`<option ${v===YEAR?'selected':''}>${v}</option>`).join('')}</select></label></div>
+  <div class="kpi"><div>รายรับ<b class="in">${baht(TI)}</b></div><div>รายจ่าย<b class="ex">${baht(TE)}</b></div><div>กำไร/ขาดทุน<b class="${TI-TE>=0?'in':'ex'}">${baht(TI-TE)}</b></div></div>
+  <div class="card tw"><table><tr><th>เดือน</th><th>รายรับ</th><th>รายจ่าย</th><th>คงเหลือ</th><th style="min-width:120px"></th></tr>
+  ${M.map((n,i)=>`<tr><td>${n}</td><td class="in">${baht(inc[i])}</td><td class="ex">${baht(exp[i])}</td><td>${baht(inc[i]-exp[i])}</td>
+  <td><div class="bar"><i style="width:${inc[i]/mx*100}%;background:var(--g)"></i></div><div class="bar"><i style="width:${exp[i]/mx*100}%;background:var(--r)"></i></div></td></tr>`).join('')}
+  <tr><th>รวม</th><th>${baht(TI)}</th><th>${baht(TE)}</th><th>${baht(TI-TE)}</th><th></th></tr></table></div>
+  <div class="card"><b>รายจ่ายแยกหมวด</b><table>${Object.entries(cat).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${baht(v)}</td><td>${TE?(v/TE*100).toFixed(1):0}%</td></tr>`).join('')||'<tr><td>ไม่มีข้อมูล</td></tr>'}</table></div>`;
+}
+loadAll();
+</script>
+</body>
+</html>
